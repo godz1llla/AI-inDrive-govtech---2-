@@ -1,0 +1,44 @@
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# ── Secrets — NEVER push API keys ─────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── ML artifacts (large binary files) ─────────────────────
+*.cbm
+*.pkl
+*.joblib
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+audit_log.jsonl
+
+# ── Node / Frontend ───────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+.pnpm-store/
+
+# ── OS & Editor ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Generated data (large Excel) ──────────────────────────
+merit_scoring_dataset_33k.xlsx
