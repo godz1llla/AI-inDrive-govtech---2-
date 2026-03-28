@@ -22,12 +22,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load registry
-DATA_PATH = "merit_scoring_dataset_33k.xlsx"
+# Load registry with robust path handling (Docker-safe)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(BASE_DIR, "merit_scoring_dataset_33k.xlsx")
+
+# Fallback for local dev if file is in backend/
+if not os.path.exists(DATA_PATH):
+    DATA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "merit_scoring_dataset_33k.xlsx")
+
 df_browser_raw = pd.read_excel(DATA_PATH).head(100)
 df_browser = df_browser_raw.loc[:, ~df_browser_raw.columns.str.contains('^Unnamed')].copy()
 
-AUDIT_LOG_PATH = "audit_log.jsonl"
+# Audit log in project root
+AUDIT_LOG_PATH = os.path.join(BASE_DIR, "audit_log.jsonl")
 
 class AnalysisRequest(BaseModel):
     farmer_data: dict
