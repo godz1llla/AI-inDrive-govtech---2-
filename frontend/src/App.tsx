@@ -56,7 +56,7 @@ const i18n = {
   }
 };
 
-const API = "http://localhost:8001";
+const API = "http://127.0.0.1:8001";
 
 type VerdictKey = "РЕКОМЕНДОВАНО К ОДОБРЕНИЮ" | "РЕКОМЕНДОВАНА ПРОВЕРКА" | "РЕКОМЕНДОВАН ОТКАЗ" | "ОДОБРИТЬ" | "ВЫЕЗДНАЯ ПРОВЕРКА" | "ОТКАЗАТЬ";
 const VERDICT_CONFIG: Record<string, { headerBg: string; accent: string; textClass: string; icon: any }> = {
