@@ -17,10 +17,11 @@ env/
 .env.*
 !.env.example
 
-# ── ML artifacts (large binary files) ─────────────────────
-*.cbm
-*.pkl
-*.joblib
+# ── ML artifacts ─────────────────────────────────────────
+# .cbm and .xlsx are REQUIRED for jury evaluation — do not ignore
+# *.cbm
+# *.pkl
+# *.joblib
 
 # ── Logs ──────────────────────────────────────────────────
 *.log
@@ -41,4 +42,5 @@ Thumbs.db
 *.swo
 
 # ── Generated data (large Excel) ──────────────────────────
-merit_scoring_dataset_33k.xlsx
+# merit_scoring_dataset_33k.xlsx is REQUIRED for jury evaluation
+# merit_scoring_dataset_33k.xlsx
