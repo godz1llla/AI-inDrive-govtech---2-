@@ -155,7 +155,7 @@
 
 ```bash
 git clone <repo-url>
-cd asdasd
+cd <repo-broooooo-url;)>
 ```
 
 ### 2. Настроить переменные окружения
