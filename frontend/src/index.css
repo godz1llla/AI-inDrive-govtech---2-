@@ -5,17 +5,55 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background-color: #f5f7fa;
+  --bg-main: #09090b;
+  --bg-card: #18181b;
+  --bg-sidebar: #0e0e11;
+  --accent-primary: #b6ff00;
+  --accent-purple: #7b61ff;
+  --accent-orange: #ff5f1f;
+  --text-dim: #a1a1aa;
 }
 
 body {
+  background-color: var(--bg-main);
+  color: white;
   margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
 }
 
-* {
-  box-sizing: border-box;
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+.premium-card {
+  background: var(--bg-card);
+  border: 1px solid #27272a;
+}
+
+.glass {
+  background: rgba(24, 24, 27, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@layer base {
+  button {
+    @apply active:scale-95 transition-transform;
+  }
 }

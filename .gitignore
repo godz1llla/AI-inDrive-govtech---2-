@@ -20,8 +20,9 @@ env/
 # ── ML artifacts ─────────────────────────────────────────
 # .cbm and .xlsx are REQUIRED for jury evaluation — do not ignore
 # *.cbm
-# *.pkl
-# *.joblib
+*.pkl
+*.joblib
+merit_model.joblib
 
 # ── Logs ──────────────────────────────────────────────────
 *.log
