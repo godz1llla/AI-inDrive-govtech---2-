@@ -4,7 +4,6 @@ ml_service.py — CatBoost ML Inference & SHAP Explainability Layer (Agro-GovTec
 Customized for Breeding Livestock (Племенное Животноводство)
 """
 import os
-import joblib
 import pandas as pd
 import numpy as np
 import shap
