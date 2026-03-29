@@ -13,7 +13,7 @@ class MLService:
     """Singleton wrapper around CatBoost model with Agro-specific Radar & Archetypes."""
 
     def __init__(self):
-        self.model_path = os.path.join(os.path.dirname(__file__), "merit_model.cbm")
+        self.model_path = os.path.join(os.path.dirname(__file__), "catboost_model.cbm")
         self.model = None
         self.feature_names = None
         self.explainer = None
