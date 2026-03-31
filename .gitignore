@@ -45,3 +45,7 @@ Thumbs.db
 # ── Generated data (large Excel) ──────────────────────────
 # merit_scoring_dataset_33k.xlsx is REQUIRED for jury evaluation
 # merit_scoring_dataset_33k.xlsx
+
+# ── Audit files ────────────────────────────────────────────
+# AGROSCORE_FINAL_AUDIT_2025.csv — national registry, keep in repo
+merit_scoring_final_audit.csv

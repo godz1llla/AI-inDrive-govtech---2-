@@ -23,28 +23,39 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-# Load full registry with robustness - prioritize the final audit with scores
+# ─── Data Loading ────────────────────────────────────────────────────────────
+# Priority: 1) AGROSCORE_FINAL_AUDIT_2025.csv (pre-calculated national registry)
+#           2) merit_scoring_final_audit.csv   (fallback)
+#           3) raw xlsx                        (last resort)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FINAL_AUDIT_PATH = os.path.join(BASE_DIR, "merit_scoring_final_audit.csv")
-DATA_PATH = os.path.join(BASE_DIR, "merit_scoring_dataset_33k.xlsx")
 
-if os.path.exists(FINAL_AUDIT_PATH):
-    df_browser = pd.read_csv(FINAL_AUDIT_PATH)
-    print("Loaded 33k+ results from final audit CSV.")
+NATIONAL_AUDIT  = os.path.join(BASE_DIR, "AGROSCORE_FINAL_AUDIT_2025.csv")
+LEGACY_AUDIT    = os.path.join(BASE_DIR, "merit_scoring_final_audit.csv")
+DATA_PATH       = os.path.join(BASE_DIR, "merit_scoring_dataset_33k.xlsx")
+
+if os.path.exists(NATIONAL_AUDIT):
+    df_browser = pd.read_csv(NATIONAL_AUDIT)
+    # Sort by ai_score descending → national ranking on first page
+    if 'ai_score' in df_browser.columns:
+        df_browser = df_browser.sort_values('ai_score', ascending=False).reset_index(drop=True)
+    print(f"✅ National Registry loaded: {len(df_browser):,} records from AGROSCORE_FINAL_AUDIT_2025.csv")
+elif os.path.exists(LEGACY_AUDIT):
+    df_browser = pd.read_csv(LEGACY_AUDIT)
+    print(f"⚠️  Fallback: loaded {len(df_browser):,} records from merit_scoring_final_audit.csv")
 else:
     df_browser_raw = pd.read_excel(DATA_PATH)
     df_browser = df_browser_raw.loc[:, ~df_browser_raw.columns.str.contains('^Unnamed')].copy()
-    print("Warning: final audit not found, loading raw Excel.")
+    print(f"⚠️  Last resort: loaded {len(df_browser):,} records from raw Excel")
 
 TOTAL_COUNT = len(df_browser)
 
-# Pre-calculate global averages for the dashboard radar chart
+# Pre-calculate global averages for Dashboard Radar
 GLOBAL_RADAR_AVGS = {
-    "Продуктивность": float(df_browser['ai_score'].mean()) if 'ai_score' in df_browser else 57.0,
-    "Сохранность стада": float((1 - df_browser['Показатель падежа скота'].fillna(0)).mean() * 100),
-    "Технологичность": float((df_browser['Наличие автоматизации'] == 1).mean() * 100),
-    "Юридическая история": float((df_browser['История нарушений'] == 0).mean() * 100),
-    "Региональное соответствие": 82.5 
+    "Продуктивность":        round(float(df_browser['ai_score'].mean()), 1) if 'ai_score' in df_browser else 57.0,
+    "Сохранность стада":     round(float((1 - df_browser['Показатель падежа скота'].fillna(0)).mean() * 100), 1),
+    "Технологичность":       round(float((df_browser['Наличие автоматизации'] == 1).mean() * 100), 1),
+    "Юридическая история":   round(float((df_browser['История нарушений'] == 0).mean() * 100), 1),
+    "Региональное соответствие": 82.5
 }
 
 # Audit log in project root
@@ -76,16 +87,15 @@ async def get_applications(page: int = 1, size: int = 50, response: Response = N
 
 @app.get("/analytics")
 async def get_analytics():
-    # Calculation across ALL 33,000 applications
     scores = df_browser['ai_score'].fillna(0).values if 'ai_score' in df_browser else df_browser['target_efficiency'].fillna(0).values
-    
-    # Histogram data
+
+    # Histogram
     hist, bin_edges = np.histogram(scores, bins=[0, 20, 40, 60, 75, 85, 100])
     histogram_data = [
         {"range": f"{int(bin_edges[i])}-{int(bin_edges[i+1])}", "count": int(hist[i])}
         for i in range(len(hist))
     ]
-    
+
     # Region distribution
     region_counts = df_browser['Область'].value_counts().head(5).to_dict()
     region_data = [{"name": k, "value": v} for k, v in region_counts.items()]
@@ -93,23 +103,37 @@ async def get_analytics():
     # TOP Regions by efficiency
     if 'ai_score' in df_browser:
         region_avg = df_browser.groupby('Область')['ai_score'].mean().sort_values(ascending=False).head(5)
-        top_regions = [{"name": k, "score": round(v, 1)} for k, v in region_avg.items()]
+        top_regions = [{"name": k, "score": round(float(v), 1)} for k, v in region_avg.items()]
     else:
         top_regions = []
-    
+
+    # Recommendation counts from pre-calculated column
+    if 'system_recommendation' in df_browser.columns:
+        rec_counts = df_browser['system_recommendation'].value_counts().to_dict()
+        approved   = int(rec_counts.get("ОДОБРИТЬ",  0))
+        check      = int(rec_counts.get("ПРОВЕРИТЬ", 0))
+        rejected   = int(rec_counts.get("ОТКАЗАТЬ",  0))
+    else:
+        approved  = int(np.sum(scores >= 70))
+        check     = int(np.sum(df_browser.get('anomaly_flag', pd.Series(False)) == True))
+        rejected  = int(np.sum(scores < 40))
+
     return {
         "total_evaluated": TOTAL_COUNT,
-        "avg_score": float(np.mean(scores)),
+        "avg_score": round(float(np.mean(scores)), 1),
         "histogram": histogram_data,
         "region_distribution": region_data,
         "top_regions": top_regions,
-        "global_radar": [
-            {"subject": k, "A": v} for k, v in GLOBAL_RADAR_AVGS.items()
-        ],
+        "global_radar": [{"subject": k, "A": v} for k, v in GLOBAL_RADAR_AVGS.items()],
+        "recommendations": {
+            "approved": approved,
+            "check":    check,
+            "rejected": rejected
+        },
         "anti_fraud": {
-            "verified": int(np.sum(scores > 30)),
-            "high_risk": int(np.sum(df_browser['anomaly_flag'] == True)) if 'anomaly_flag' in df_browser else 0,
-            "likely_falsified": int(np.sum(scores <= 15))
+            "verified":          TOTAL_COUNT - check - rejected,
+            "high_risk":         check,
+            "likely_falsified":  int(np.sum(scores <= 15))
         }
     }
 
