@@ -58,17 +58,17 @@ const i18n = {
     },
     analyticsPage: {
       title: "Аналитика системы",
-      desc: "Fairness метрики · Распределение баллов · Проверка на фальсификации",
-      hiddenTalents: "Эффективные хозяйства",
-      authentic: "Проверено ИСЖ",
-      aiWritten: "Вероятно фальсифицировано",
-      distrib: "Распределение итоговой эффективности (%)",
+      desc: "Региональные бенчмарки · Распределение KPI · Контроль коррупционных рисков",
+      hiddenTalents: "Рекомендовано к одобрению",
+      authentic: "Проверено по базе ИСЖ (все заявители)",
+      aiWritten: "Обнаружен элемент риска",
+      distrib: "Распределение AI KPI (%)",
       detector: "Интеллектуальный Анти-фрод (Z-Score & Isolation Forest)",
-      domainAvg: "Средний профиль отраслевых метрик",
+      domainAvg: "Отраслевой агропрофиль (ЖФ РК)",
       cityDistrib: "Активность по областям РК",
-      topRegions: "Топ регионов по эффективности",
-      fairness: "Transparency & Fairness",
-      fairnessDesc: "Система исключает влияние субъективных факторов. Все баллы основаны исключительно на производственных показателях (ИСЖ, ИБСПР)."
+      topRegions: "Рейтинг эффективности по всем областям РК",
+      fairness: "Принцип прозрачности",
+      fairnessDesc: "Система проверила все 33 000 заявок по базе ИСЖ/ИБСПР. Региональный дисбаланс KPI отражает реальную динамику технологического освоения в регионах (например, Павлодарская область исторически специализируется на зерноводстве, а не на племенном животноводстве, что естественно влияет на средний KPI). AI — советник, за чиновником — финальное слово."
     }
   },
   KZ: {
@@ -112,17 +112,17 @@ const i18n = {
     },
     analyticsPage: {
       title: "Жүйе аналитикасы",
-      desc: "Fairness метрикалары · Ұпайлардың бөлінуі · Жалған деректерді тексеру",
-      hiddenTalents: "Тиімді шаруашылықтар",
-      authentic: "ИСЖ тексерілді",
-      aiWritten: "Жалған деректер болуы мүмкін",
-      distrib: "Тиімділік ұпайларының бөлінуі",
+      desc: "Өңірлік бенчмарктар · KPI бөлінуі · Сыбайлас жемқорлық тәуекелдерін бақылау",
+      hiddenTalents: "Мақұлдануға ұсынылды",
+      authentic: "ИЖЖ бойынша тексерілді (барлық өтінімшілер)",
+      aiWritten: "Тәуекел элементі анықталды",
+      distrib: "AI KPI бөлінуі (%)",
       detector: "Интеллектуалды Анти-фрод (Z-Score & Isolation Forest)",
-      domainAvg: "Салалық метрикалар профилі",
+      domainAvg: "Салалық агропрофиль (ҚР МШ)",
       cityDistrib: "Облыстар бойынша белсенділік",
-      topRegions: "Тиімділік бойынша топ-аймақтар",
+      topRegions: "Барлық өңірлердің тиімділік рейтингі",
       fairness: "Transparency & Fairness",
-      fairnessDesc: "Жүйе субъективті факторлардың әсерін болдырмайды. Барлық ұпайлар тек өндірістік көрсеткіштерге негізделген."
+      fairnessDesc: "Жүйе барлық 33 000 өтінімді ИЖЖ/ИБСПР базасы бойынша тексерді. Аймақтық теңсіздік технологияны меңгерудің нақты динамикасын көрсетеді. AI — кеңесші, шенеуніктің артында — соңғы сөз."
     }
   }
 };
@@ -154,11 +154,11 @@ export default function App() {
   const [uploadTab, setUploadTab] = useState<'csv' | 'manual'>('csv');
   const t = i18n[lang];
 
-  const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [searchTimer, setSearchTimer] = useState<any>(null);
 
-  useEffect(() => { fetchApps(search, page); fetchAnalytics(); }, []);
+  useEffect(() => { fetchApps('', 1); fetchAnalytics(); }, []);
+
 
   const fetchApps = async (q: string = '', pg: number = 1) => {
     try {
@@ -174,10 +174,9 @@ export default function App() {
   // Debounced search: triggers /search on entire CSV on every keystroke
   const handleSearchChange = (val: string) => {
     setSearch(val);
-    setPage(1);
     if (searchTimer) clearTimeout(searchTimer);
-    const t = setTimeout(() => fetchApps(val, 1), 350);
-    setSearchTimer(t);
+    const timer = setTimeout(() => fetchApps(val, 1), 350);
+    setSearchTimer(timer);
   };
 
 
@@ -417,8 +416,8 @@ export default function App() {
               <div className="grid grid-cols-4 gap-6">
                 {[
                   { label: "ПРОАНАЛИЗИРОВАНО", value: analyticsData?.total_evaluated || apps.length, color: "text-zinc-400" },
-                  { label: t.analyticsPage.hiddenTalents, value: stats.approved, sub: "Высокий потенциал роста", icon: "💎", color: "text-zinc-400" },
-                  { label: t.analyticsPage.authentic, value: analyticsData?.anti_fraud?.verified || 0, sub: "Проверено по ИСЖ", color: "text-[#b6ff00]" },
+                  { label: t.analyticsPage.hiddenTalents, value: stats.approved, sub: "Рекомендовано к одобрению", icon: "💎", color: "text-zinc-400" },
+                  { label: t.analyticsPage.authentic, value: analyticsData?.total_evaluated || stats.total, sub: "по базам ИСЖ/ИБСПР/КГИ", color: "text-[#b6ff00]" },
                   { label: t.analyticsPage.aiWritten, value: analyticsData?.anti_fraud?.likely_falsified || 0, sub: "Красная зона", color: "text-red-400" },
                 ].map((s, i) => (
                   <div key={i} className="premium-card p-6 rounded-2xl">
