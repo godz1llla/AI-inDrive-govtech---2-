@@ -711,7 +711,7 @@ AI KPI Score: ${score}%
               className="w-full max-w-7xl bg-[#0e0e11] border border-[#27272a] rounded-[48px] overflow-hidden flex h-[90vh] shadow-[0_60px_150px_rgba(0,0,0,0.9)]"
             >
               <div className="w-96 border-r border-[#27272a] p-10 flex flex-col bg-[#0b0b0d]">
-                <button onClick={() => setSelected(null)} className="flex items-center gap-3 text-zinc-500 hover:text-[#b6ff00] transition-colors text-xs font-black mb-12 uppercase tracking-widest">
+                <button onClick={() => setSelected(null)} className="flex items-center gap-3 text-zinc-500 hover:text-[#b6ff00] transition-colors text-xs font-black mb-8 uppercase tracking-widest">
                   <XCircle size={20} /> Закрыть
                 </button>
                 <div className="mb-6">
@@ -727,9 +727,9 @@ AI KPI Score: ${score}%
 
                 <div className="flex-1 relative mt-6">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-4 text-center">Отраслевой Анализ Профиля</h4>
-                  <div className="h-56 mb-4">
+                  <div className="h-52 mb-3">
                     <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="75%" data={analysis?.radar_data || []}>
+                      <RadarChart cx="50%" cy="50%" outerRadius="55%" data={analysis?.radar_data || []}>
                         <PolarGrid stroke="#27272a" />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: '#52525b', fontSize: 7, fontWeight: 800 }} />
                         <Radar dataKey="value" stroke="#b6ff00" fill="#b6ff00" fillOpacity={0.2} />
@@ -737,11 +737,11 @@ AI KPI Score: ${score}%
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="space-y-4 pt-10 border-t border-white/5">
+                  <div className="overflow-y-auto flex-1 space-y-2 pt-3 border-t border-white/5 custom-scrollbar">
                     {analysis?.radar_data?.map((d: any) => (
-                      <div key={d.subject} className="flex justify-between items-center px-2">
-                        <span className="text-[10px] font-bold text-zinc-600 uppercase italic">{d.subject}</span>
-                        <span className="text-xs font-black text-zinc-300">{d.value}%</span>
+                      <div key={d.subject} className="flex justify-between items-center px-1 py-1">
+                        <span className="text-[10px] font-bold text-zinc-600 uppercase italic leading-tight max-w-[60%]">{d.subject}</span>
+                        <span className="text-xs font-black text-zinc-200 tabular-nums">{Number(d.value).toFixed(1)}%</span>
                       </div>
                     ))}
                   </div>
