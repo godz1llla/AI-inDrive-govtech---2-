@@ -80,9 +80,33 @@ async def get_applications(page: int = 1, size: int = 50, response: Response = N
     start = (page - 1) * size
     end = start + size
     subset = df_browser.iloc[start:end]
-    
-    # Add Total count header for the frontend
     response.headers["X-Total-Count"] = str(TOTAL_COUNT)
+    return Response(content=subset.to_json(orient='records'), media_type="application/json")
+
+@app.get("/search")
+async def search_applications(q: str = "", page: int = 1, size: int = 50, response: Response = None):
+    """Full-text search across ALL 33k records — not just the loaded page."""
+    if not q or not q.strip():
+        # No query → return normal paginated list
+        start = (page - 1) * size
+        subset = df_browser.iloc[start:start + size]
+        response.headers["X-Total-Count"] = str(TOTAL_COUNT)
+        return Response(content=subset.to_json(orient='records'), media_type="application/json")
+
+    term = q.strip().lower()
+    # Search across all string/object columns + numeric IIN column
+    mask = pd.Series([False] * len(df_browser), index=df_browser.index)
+    for col in df_browser.columns:
+        try:
+            mask |= df_browser[col].astype(str).str.lower().str.contains(term, na=False)
+        except Exception:
+            pass
+
+    filtered = df_browser[mask].reset_index(drop=True)
+    total = len(filtered)
+    start = (page - 1) * size
+    subset = filtered.iloc[start:start + size]
+    response.headers["X-Total-Count"] = str(total)
     return Response(content=subset.to_json(orient='records'), media_type="application/json")
 
 @app.get("/analytics")
@@ -96,13 +120,13 @@ async def get_analytics():
         for i in range(len(hist))
     ]
 
-    # Region distribution
-    region_counts = df_browser['Область'].value_counts().head(5).to_dict()
+    # Region distribution — ALL regions (not just top-5)
+    region_counts = df_browser['Область'].value_counts().to_dict()
     region_data = [{"name": k, "value": v} for k, v in region_counts.items()]
 
-    # TOP Regions by efficiency
+    # ALL Regions by average AI efficiency (sorted best first)
     if 'ai_score' in df_browser:
-        region_avg = df_browser.groupby('Область')['ai_score'].mean().sort_values(ascending=False).head(5)
+        region_avg = df_browser.groupby('Область')['ai_score'].mean().sort_values(ascending=False)
         top_regions = [{"name": k, "score": round(float(v), 1)} for k, v in region_avg.items()]
     else:
         top_regions = []

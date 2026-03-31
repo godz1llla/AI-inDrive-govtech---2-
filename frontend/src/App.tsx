@@ -154,12 +154,33 @@ export default function App() {
   const [uploadTab, setUploadTab] = useState<'csv' | 'manual'>('csv');
   const t = i18n[lang];
 
-  useEffect(() => { fetchApps(); fetchAnalytics(); }, []);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [searchTimer, setSearchTimer] = useState<any>(null);
 
-  const fetchApps = async () => {
-    try { const r = await axios.get(`${API}/applications`); setApps(r.data); }
+  useEffect(() => { fetchApps(search, page); fetchAnalytics(); }, []);
+
+  const fetchApps = async (q: string = '', pg: number = 1) => {
+    try {
+      const endpoint = `${API}/search?q=${encodeURIComponent(q)}&page=${pg}&size=50`;
+      const r = await axios.get(endpoint);
+      setApps(r.data);
+      const total = parseInt(r.headers['x-total-count'] || '0', 10);
+      setTotalCount(total || r.data.length);
+    }
     catch (e) { console.error(e); }
   };
+
+  // Debounced search: triggers /search on entire CSV on every keystroke
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+    if (searchTimer) clearTimeout(searchTimer);
+    const t = setTimeout(() => fetchApps(val, 1), 350);
+    setSearchTimer(t);
+  };
+
+
 
   const fetchAnalytics = async () => {
     try { const r = await axios.get(`${API}/analytics`); setAnalyticsData(r.data); }
@@ -173,24 +194,16 @@ export default function App() {
     finally { setLoading(false); }
   };
 
-  const filteredApps = useMemo(() => {
-    return apps.filter(a =>
-      a['Область']?.toLowerCase().includes(search.toLowerCase()) ||
-      a['Фермер (ФИО/Название)']?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [apps, search]);
+  // Server-side search handles filtering — client list is always the right page
+  const filteredApps = apps;
 
   const stats = useMemo(() => {
-    const total = analyticsData?.total_evaluated || apps.length;
+    const total = analyticsData?.total_evaluated || totalCount || apps.length;
     const avg = analyticsData?.avg_score || 0;
-    // Real-world GovTech ratios for 33k rows
-    return {
-      total,
-      avg: Math.round(avg),
-      pending: Math.round(total * 0.42), // ~13,860 on verification
-      approved: Math.round(total * 0.12)  // ~3,960 in short-list
-    };
-  }, [apps, analyticsData]);
+    const approved = analyticsData?.recommendations?.approved || Math.round(total * 0.12);
+    const pending = analyticsData?.recommendations?.check || Math.round(total * 0.42);
+    return { total, avg: Math.round(avg * 10) / 10, pending, approved };
+  }, [apps, analyticsData, totalCount]);
 
   const dashboardRadarData = useMemo(() => {
     return analyticsData?.global_radar || [
@@ -286,7 +299,7 @@ export default function App() {
                   type="text"
                   placeholder={t.search}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-12 pr-6 py-3 bg-[#18181b] border border-[#27272a] rounded-xl text-sm outline-none focus:border-[#b6ff00] w-80 transition-all shadow-xl font-medium"
                 />
               </div>
@@ -483,16 +496,34 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="premium-card p-8 rounded-2xl min-h-[400px]">
-                  <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500 mb-8">{t.analyticsPage.topRegions}</h3>
-                  <div className="space-y-4">
+                <div className="premium-card p-8 rounded-2xl min-h-[400px] col-span-2">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-black uppercase tracking-widest text-zinc-500">{t.analyticsPage.topRegions}</h3>
+                    <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">
+                      {analyticsData?.top_regions?.length || 0} областей
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 max-h-[320px] overflow-y-auto pr-2 custom-scroll">
                     {analyticsData?.top_regions?.map((reg: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-zinc-800">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-black text-zinc-600">0{idx + 1}</span>
-                          <p className="text-sm font-bold text-white uppercase">{reg.name}</p>
+                      <div key={idx} className="flex items-center justify-between py-2.5 border-b border-zinc-800/50 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "w-6 h-6 rounded-lg text-[10px] font-black flex items-center justify-center flex-shrink-0",
+                            idx === 0 ? "bg-[#b6ff00] text-black" :
+                              idx === 1 ? "bg-zinc-400/20 text-zinc-300" :
+                                idx === 2 ? "bg-orange-400/20 text-orange-300" :
+                                  "bg-zinc-900 text-zinc-600"
+                          )}>
+                            {idx + 1}
+                          </span>
+                          <p className="text-xs font-bold text-zinc-300 truncate max-w-[160px]">{reg.name}</p>
                         </div>
-                        <p className="text-sm font-black text-[#b6ff00]">{reg.score}%</p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="w-16 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#b6ff00] rounded-full" style={{ width: `${Math.min(100, reg.score)}%` }} />
+                          </div>
+                          <p className="text-xs font-black text-[#b6ff00] w-10 text-right">{reg.score}</p>
+                        </div>
                       </div>
                     ))}
                   </div>

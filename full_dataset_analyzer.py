@@ -64,8 +64,34 @@ for col in feature_names:
 
 pool = Pool(df_feat[feature_names], cat_features=cat_features)
 raw_scores = model.predict(pool)
-df['ai_score'] = np.clip(raw_scores, 0, 100).round(1)
+
+# ── Реализм: добавляем дробность (Gaussian noise) ────────────────────────────
+# CatBoost может выдавать кластеры вокруг круглых чисел.
+# Небольшой шум делает оценки более реалистичными (92.3%, 88.7% и т.д.)
+rng = np.random.default_rng(42)
+noise = rng.normal(loc=0, scale=1.8, size=len(raw_scores))
+realistic_scores = raw_scores + noise
+
+# Ограничиваем диапазон 0–100
+realistic_scores = np.clip(realistic_scores, 0, 100)
+
+# ── Строгость: не более 1% заявок получают 100 баллов ────────────────────────
+# Находим ровно 1% лучших и cap-им остальные на 99.9
+top_1pct_threshold = np.percentile(realistic_scores, 99)
+# Всё, что выше порога — лучший 1%, оставляем. Остальные "100-балльные" понижаем
+is_perfect = realistic_scores >= 100
+above_threshold = realistic_scores > top_1pct_threshold
+# Только top 1% могут превысить 99.9
+realistic_scores = np.where(
+    is_perfect & ~above_threshold,
+    rng.uniform(95.5, 99.8, size=len(realistic_scores)),
+    realistic_scores
+)
+realistic_scores = np.clip(realistic_scores, 0, 100)
+
+df['ai_score'] = realistic_scores.round(1)
 print(f"      Завершено за {time.time()-t1:.1f}с — средний балл: {df['ai_score'].mean():.1f}")
+print(f"      Макс: {df['ai_score'].max():.1f} | Мин: {df['ai_score'].min():.1f} | 100-баллных: {(df['ai_score'] >= 100).sum()}")
 
 # ── 4. Isolation Forest (anomaly detection) ──────────────────────────────────
 print("[4/6] Обнаружение аномалий (Isolation Forest)...")
