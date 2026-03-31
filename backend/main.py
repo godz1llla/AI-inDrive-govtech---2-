@@ -188,16 +188,24 @@ async def analyze_application(req: AnalysisRequest):
         fraud = detect_fraud(farmer_data)
         result["fraud"] = fraud.to_dict()
 
-        # 4. Verdict logic
-        score = result["score"]
+        # 4. Verdict logic (including anomaly-conflict override)
+        score = round(result["score"], 1)
+        is_anomaly = result.get("is_anomaly", False) or fraud.requires_field_inspection
+
         if fraud.requires_field_inspection:
             verdict_directive = "РЕКОМЕНДОВАНА ПРОВЕРКА"
+        elif is_anomaly and score >= 70:
+            # CONFLICT: high score but anomalous behavior — commission must review
+            verdict_directive = "РЕКОМЕНДОВАНА ПРОВЕРКА"
+            result["anomaly_conflict"] = True
+            result["conflict_note"] = f"Балл высокий ({score}), однако Isolation Forest выявил аномальный профиль поведения. Рекомендуется очная проверка по ИСЖ."
         elif score >= 70:
             verdict_directive = "РЕКОМЕНДОВАНО К ОДОБРЕНИЮ"
         else:
             verdict_directive = "РЕКОМЕНДОВАН ОТКАЗ"
 
         result["verdict_status"] = verdict_directive
+        result["score"] = score  # ensure 1-decimal in response
 
         # LLM Verdict (Groq)
         try:
@@ -213,7 +221,7 @@ async def analyze_application(req: AnalysisRequest):
             )
             result["explanation"] = chat.choices[0].message.content.strip()
         except:
-            result["explanation"] = f"{verdict_directive}. Скоринг эффективности: {score:.0f}."
+            result["explanation"] = f"{verdict_directive}. AI KPI: {score:.1f}/100."
 
         return result
 

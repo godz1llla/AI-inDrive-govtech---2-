@@ -155,6 +155,7 @@ export default function App() {
   const t = i18n[lang];
 
   const [totalCount, setTotalCount] = useState(0);
+  const [currentRegistryPage, setCurrentRegistryPage] = useState(1);
   const [searchTimer, setSearchTimer] = useState<any>(null);
 
   useEffect(() => { fetchApps('', 1); fetchAnalytics(); }, []);
@@ -356,59 +357,149 @@ export default function App() {
 
           {/* REGISTRY VIEW */}
           {activeTab === 'registry' && (
-            <div className="premium-card rounded-2xl overflow-hidden shadow-2xl">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-[#27272a] bg-[#121217]">
-                    {['#', 'ЗАЯВИТЕЛЬ / ОБЛАСТЬ', 'РАЙОН', 'КАТЕГОРИЯ', 'AI KPI SCORE', 'СТАТУС МСХ', 'ДЕЙСТВИЯ'].map(h => (
-                      <th key={h} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#27272a]">
-                  {filteredApps.map((app, i) => {
-                    const score = Math.round(app['target_efficiency'] || 0);
-                    return (
-                      <tr key={i} className="hover:bg-white/5 transition-colors group cursor-pointer" onClick={() => handleAnalyze(app)}>
-                        <td className="px-6 py-5 text-xs font-mono text-zinc-600">#{app['№ п/п'] || i + 1}</td>
-                        <td className="px-6 py-5">
-                          <p className="text-xs font-black truncate max-w-[200px] uppercase tracking-tight">{app['Фермер (ФИО/Название)'] || 'Заявитель'}</p>
-                          <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">{app['Область']}</p>
-                        </td>
-                        <td className="px-6 py-5 text-xs font-bold text-zinc-400 capitalize">{app['Район хозяйства']?.toLowerCase()}</td>
-                        <td className="px-6 py-5">
-                          <span className={cn(
-                            "px-2.5 py-1 rounded-full text-[10px] font-black border uppercase",
-                            ARCHETYPE_COLORS[app['archetype']] || ARCHETYPE_COLORS["Базовый профиль"]
-                          )}>
-                            {app['archetype'] || "Базовый профиль"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            <span className={cn("text-sm font-black italic", score > 70 ? "text-[#b6ff00]" : "text-zinc-400")}>{score}%</span>
-                            <div className="w-12 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#b6ff00]" style={{ width: `${score}%` }} />
+            <div className="space-y-4">
+              <div className="premium-card rounded-2xl overflow-hidden shadow-2xl">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-[#27272a] bg-[#121217]">
+                      {['#', 'ЗАЯВИТЕЛЬ / ОБЛАСТЬ', 'РАЙОН', 'КАТЕГОРИЯ', 'AI KPI SCORE', 'СТАТУС МСХ', 'ДЕЙСТВИЯ'].map(h => (
+                        <th key={h} className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#27272a]">
+                    {filteredApps.map((app, i) => {
+                      // Use pre-calculated ai_score, fallback to target_efficiency
+                      const rawScore = app['ai_score'] ?? app['target_efficiency'] ?? 0;
+                      const score = Math.round(rawScore * 10) / 10; // exactly 1 decimal
+
+                      // Dynamic archetype by score
+                      const archetype = score >= 85
+                        ? 'ЛОКОМОТИВ РЕГИОНА'
+                        : score >= 40
+                          ? 'БАЗОВЫЙ ПРОФИЛЬ'
+                          : 'ГРУППА РИСКА';
+                      const archetypeStyle = score >= 85
+                        ? 'bg-[#b6ff00]/10 text-[#b6ff00] border-[#b6ff00]/30'
+                        : score >= 40
+                          ? 'bg-zinc-800/50 text-zinc-400 border-zinc-700'
+                          : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30';
+                      const scoreColor = score >= 70 ? 'text-[#b6ff00]' : score >= 40 ? 'text-zinc-300' : 'text-yellow-400';
+
+                      const handlePrint = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        const content = `
+AgroScore AI — Заключение ИИ
+============================
+# ${app['№ п/п'] || i + 1} | ${app['Область']}
+Район: ${app['Район хозяйства'] || '—'}
+AI KPI Score: ${score}%
+Категория: ${archetype}
+Рекомендация: ${app['system_recommendation'] || '—'}
+Аномалия: ${app['anomaly_flag'] ? 'ДА' : 'НЕТ'}
+Региональный Z-score: ${app['regional_z_score'] ?? '—'}
+
+На основании проведенного AI-анализа — это рекомендация.
+Финальное решение за государственным экспертом.`;
+                        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `agroscore_${app['Номер заявки'] || i + 1}.txt`;
+                        a.click(); URL.revokeObjectURL(url);
+                      };
+
+                      return (
+                        <tr key={i} className="hover:bg-white/5 transition-colors group cursor-pointer" onClick={() => handleAnalyze(app)}>
+                          <td className="px-6 py-5 text-xs font-mono text-zinc-600">#{app['№ п/п'] || i + 1}</td>
+                          <td className="px-6 py-5">
+                            <p className="text-xs font-black truncate max-w-[200px] uppercase tracking-tight">{app['Наименование субсидирования'] || app['Область'] || 'Заявитель'}</p>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1">{app['Область']}</p>
+                          </td>
+                          <td className="px-6 py-5 text-xs font-bold text-zinc-400 capitalize">{app['Район хозяйства']?.toLowerCase()}</td>
+                          <td className="px-6 py-5">
+                            <span className={cn("px-2.5 py-1 rounded-full text-[10px] font-black border uppercase", archetypeStyle)}>
+                              {archetype}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex items-center gap-2">
+                              <span className={cn("text-sm font-black italic", scoreColor)}>{score.toFixed(1)}%</span>
+                              <div className="w-12 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-[#b6ff00]" style={{ width: `${score}%` }} />
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-md text-[10px] font-black text-zinc-500 uppercase tracking-widest">Верификация</span>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#b6ff00] hover:scale-110 transition-transform">
-                              <Cpu size={14} />
+                          </td>
+                          <td className="px-6 py-5">
+                            {app['system_recommendation'] ? (
+                              <span className={cn("px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border",
+                                app['system_recommendation'] === 'ОДОБРИТЬ' ? 'bg-[#b6ff00]/10 text-[#b6ff00] border-[#b6ff00]/20' :
+                                  app['system_recommendation'] === 'ПРОВЕРИТЬ' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                    'bg-red-500/10 text-red-400 border-red-500/20'
+                              )}>
+                                {app['system_recommendation']}
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-md text-[10px] font-black text-zinc-500 uppercase tracking-widest">МСХ</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex gap-2">
+                              <div title="AI Анализ" className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[#b6ff00] hover:scale-110 transition-transform">
+                                <Cpu size={14} />
+                              </div>
+                              <div title="Скачать заключение" onClick={handlePrint} className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white hover:scale-110 transition-all cursor-pointer">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M6 9V2h12v7" /><rect x="6" y="14" width="12" height="8" rx="1" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                </svg>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* PAGINATION */}
+              {totalCount > 50 && (
+                <div className="flex items-center justify-between px-4 py-3 premium-card rounded-2xl">
+                  <p className="text-[11px] font-bold text-zinc-500">
+                    Показано <span className="text-white">{filteredApps.length}</span> из <span className="text-[#b6ff00] font-black">{totalCount.toLocaleString()}</span> заявок
+                    <span className="text-zinc-600 ml-2">· 665 страниц</span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { const pg = Math.max(1, (currentRegistryPage - 1)); setCurrentRegistryPage(pg); fetchApps(search, pg); }}
+                      disabled={currentRegistryPage <= 1}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-black text-zinc-400 hover:text-white hover:border-zinc-600 disabled:opacity-30 transition-all"
+                    >← Пред.</button>
+                    {[...Array(Math.min(5, Math.ceil(totalCount / 50)))].map((_, idx) => {
+                      const pg = currentRegistryPage <= 3 ? idx + 1 : currentRegistryPage - 2 + idx;
+                      return (
+                        <button key={pg} onClick={() => { setCurrentRegistryPage(pg); fetchApps(search, pg); }}
+                          className={cn("w-8 h-8 rounded-lg text-[11px] font-black border transition-all",
+                            pg === currentRegistryPage ? "bg-[#b6ff00] text-black border-[#b6ff00]" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white"
+                          )}
+                        >{pg}</button>
+                      );
+                    })}
+                    <span className="text-zinc-600 text-[11px] font-bold">...</span>
+                    <button onClick={() => { const last = Math.ceil(totalCount / 50); setCurrentRegistryPage(last); fetchApps(search, last); }}
+                      className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-black text-zinc-400 hover:text-white transition-all">
+                      {Math.ceil(totalCount / 50)}
+                    </button>
+                    <button
+                      onClick={() => { const pg = Math.min(Math.ceil(totalCount / 50), currentRegistryPage + 1); setCurrentRegistryPage(pg); fetchApps(search, pg); }}
+                      disabled={currentRegistryPage >= Math.ceil(totalCount / 50)}
+                      className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] font-black text-zinc-400 hover:text-white hover:border-zinc-600 disabled:opacity-30 transition-all"
+                    >След. →</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
 
           {/* ANALYTICS VIEW */}
           {activeTab === 'analytics' && (
@@ -682,7 +773,7 @@ export default function App() {
                         </div>
                         <div className="bg-black/10 p-8 rounded-[32px] backdrop-blur-2xl border border-white/10 text-center min-w-[140px]">
                           <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">AI KPI Score</p>
-                          <p className="text-6xl font-black italic">{Math.round(analysis.score)}</p>
+                          <p className="text-6xl font-black italic">{Number(analysis.score).toFixed(1)}</p>
                         </div>
                       </div>
                     </div>
