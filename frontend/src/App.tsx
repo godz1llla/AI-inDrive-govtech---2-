@@ -130,10 +130,9 @@ const i18n = {
 const API = "http://127.0.0.1:8002";
 
 const ARCHETYPE_COLORS: Record<string, string> = {
-  "Локомотив региона": "bg-lime-500/10 text-lime-400 border-lime-500/20",
-  "Рискованный актив": "bg-red-500/10 text-red-400 border-red-500/20",
-  "Начинающий производитель": "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  "Базовый профиль": "bg-gray-500/10 text-gray-400 border-gray-500/20",
+  "ЛОКОМОТИВ РЕГИОНА": "bg-[#b6ff00]/10 text-[#b6ff00] border-[#b6ff00]/30",
+  "БАЗОВЫЙ ПРОФИЛЬ": "bg-zinc-800/50 text-zinc-400 border-zinc-700",
+  "ГРУППА РИСКА": "bg-yellow-500/10 text-yellow-400 border-yellow-500/30",
 };
 
 const VERDICT_CONFIG: Record<string, { headerBg: string; accent: string; textClass: string; icon: any; glow: string }> = {
@@ -715,24 +714,24 @@ AI KPI Score: ${score}%
                 <button onClick={() => setSelected(null)} className="flex items-center gap-3 text-zinc-500 hover:text-[#b6ff00] transition-colors text-xs font-black mb-12 uppercase tracking-widest">
                   <XCircle size={20} /> Закрыть
                 </button>
-                <div className="mb-10">
-                  <p className="text-[10px] font-black text-[#b6ff00] uppercase tracking-widest mb-2">Сельхоз-профиль</p>
-                  <h3 className="text-3xl font-black uppercase tracking-tight mb-4 leading-tight">{selected['Фермер (ФИО/Название)'] || 'Заявитель'}</h3>
+                <div className="mb-6">
+                  <p className="text-[10px] font-black text-[#b6ff00] uppercase tracking-widest mb-1">Сельхоз-профиль</p>
+                  <h3 className="text-2xl font-black uppercase tracking-tight mb-3 leading-tight">{selected['Фермер (ФИО/Название)'] || 'Заявитель'}</h3>
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] font-bold text-zinc-400 uppercase">{selected['Область']}</span>
-                    <span className={cn("px-3 py-1.5 rounded-lg text-[10px] font-black border uppercase", ARCHETYPE_COLORS[analysis?.archetype] || ARCHETYPE_COLORS["Базовый профиль"])}>
+                    <span className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] font-bold text-zinc-400 uppercase">{selected['Область']}</span>
+                    <span className={cn("px-2 py-1 rounded-lg text-[10px] font-black border uppercase", ARCHETYPE_COLORS[analysis?.archetype] || ARCHETYPE_COLORS["Базовый профиль"])}>
                       {analysis?.archetype || "Базовый профиль"}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex-1 relative mt-10">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-6 text-center">Отраслевой Анализ Профиля</h4>
-                  <div className="h-64 mb-8">
+                <div className="flex-1 relative mt-6">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-4 text-center">Отраслевой Анализ Профиля</h4>
+                  <div className="h-56 mb-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="80%" data={analysis?.radar_data || []}>
+                      <RadarChart cx="50%" cy="50%" outerRadius="75%" data={analysis?.radar_data || []}>
                         <PolarGrid stroke="#27272a" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#52525b', fontSize: 8, fontWeight: 800 }} />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#52525b', fontSize: 7, fontWeight: 800 }} />
                         <Radar dataKey="value" stroke="#b6ff00" fill="#b6ff00" fillOpacity={0.2} />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -760,20 +759,25 @@ AI KPI Score: ${score}%
 
                     {/* Main Scorecard */}
                     <div className={cn(
-                      "p-12 rounded-[40px] relative overflow-hidden transition-all",
+                      "p-10 rounded-[32px] relative overflow-hidden transition-all border",
+                      analysis.anomaly_conflict ? "border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.2)]" : "border-white/5",
                       VERDICT_CONFIG[analysis.verdict_status as keyof typeof VERDICT_CONFIG]?.glow
-                    )} style={{ background: VERDICT_CONFIG[analysis.verdict_status as keyof typeof VERDICT_CONFIG]?.headerBg }}>
-                      <div className="flex justify-between items-start relative z-10 text-black">
-                        <div className="flex-1 pr-12">
-                          <div className="flex items-center gap-4 mb-6">
-                            {(() => { const C = VERDICT_CONFIG[analysis.verdict_status as keyof typeof VERDICT_CONFIG]?.icon; return <C size={48} />; })()}
-                            <h3 className="text-5xl font-black tracking-tighter uppercase leading-none">{analysis.verdict_status}</h3>
+                    )} style={{ background: analysis.anomaly_conflict ? "linear-gradient(135deg, #7B61FF 0%, #F97316 100%)" : VERDICT_CONFIG[analysis.verdict_status as keyof typeof VERDICT_CONFIG]?.headerBg }}>
+                      <div className="flex justify-between items-center relative z-10">
+                        <div className="flex-1 pr-10">
+                          <div className="flex items-center gap-4 mb-4">
+                            {(() => { const C = VERDICT_CONFIG[analysis.verdict_status as keyof typeof VERDICT_CONFIG]?.icon; return <C size={32} className={analysis.anomaly_conflict ? "text-white" : "text-black"} />; })()}
+                            <h3 className={cn("text-3xl font-black tracking-tight uppercase leading-none", analysis.anomaly_conflict ? "text-white" : "text-black")}>
+                              {analysis.anomaly_conflict ? "ТРЕБУЕТСЯ ПРОВЕРКА (КОНФЛИКТ)" : analysis.verdict_status}
+                            </h3>
                           </div>
-                          <p className="text-xl font-bold leading-relaxed max-w-2xl">{analysis.explanation}</p>
+                          <p className={cn("text-lg font-bold leading-snug max-w-2xl", analysis.anomaly_conflict ? "text-white/90" : "text-black/80")}>
+                            {analysis.anomaly_conflict ? analysis.conflict_note : analysis.explanation}
+                          </p>
                         </div>
-                        <div className="bg-black/10 p-8 rounded-[32px] backdrop-blur-2xl border border-white/10 text-center min-w-[140px]">
-                          <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">AI KPI Score</p>
-                          <p className="text-6xl font-black italic">{Number(analysis.score).toFixed(1)}</p>
+                        <div className="bg-black/20 p-6 rounded-2xl backdrop-blur-3xl border border-white/10 text-center min-w-[120px]">
+                          <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-white">AI KPI Score</p>
+                          <p className="text-5xl font-black italic text-[#b6ff00]">{Number(analysis.score).toFixed(1)}</p>
                         </div>
                       </div>
                     </div>
@@ -822,24 +826,24 @@ AI KPI Score: ${score}%
                     </div>
 
                     {/* MOA Verification Systems */}
-                    <div className="premium-card p-10">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-10 flex items-center gap-2">
+                    <div className="premium-card p-8">
+                      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-6 flex items-center gap-2">
                         <ClipboardCheck size={18} /> Государственная верификация (ИСЖ / ИБСПР / КГИ)
                       </h4>
-                      <div className="divide-y divide-white/5">
+                      <div className="grid grid-cols-3 gap-6 divide-x divide-white/5">
                         {analysis.verification?.fields?.map((val: any, j: number) => (
-                          <div key={j} className="py-8 flex justify-between items-center first:pt-0 last:pb-0">
-                            <div>
-                              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1.5">{val.source}</p>
-                              <p className="text-sm font-black text-zinc-200 uppercase tracking-tight">{lang === 'RU' ? val.label_ru : val.label_kz}</p>
+                          <div key={j} className="px-4 flex flex-col justify-between items-start first:pl-0">
+                            <div className="mb-4">
+                              <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">{val.source}</p>
+                              <p className="text-xs font-black text-zinc-200 uppercase tracking-tight leading-tight">{lang === 'RU' ? val.label_ru : val.label_kz}</p>
                             </div>
-                            <div className="text-right">
-                              <p className={cn("text-lg font-black tracking-tight", val.status === 'VERIFIED' ? "text-[#b6ff00]" : "text-[#FF5F1F]")}>
+                            <div className="w-full">
+                              <p className={cn("text-base font-black tracking-tight", val.status === 'VERIFIED' ? "text-[#b6ff00]" : "text-[#FF5F1F]")}>
                                 {lang === 'RU' ? val.detail_ru : val.detail_kz}
                               </p>
-                              <div className="flex items-center justify-end gap-2 mt-1.5">
-                                <span className="text-[9px] text-zinc-600 font-black uppercase italic">{val.status === 'VERIFIED' ? "Data Integrity Confirmed" : "Integrity Fault"}</span>
+                              <div className="flex items-center gap-2 mt-1">
                                 <div className={cn("w-1.5 h-1.5 rounded-full", val.status === 'VERIFIED' ? "bg-[#b6ff00]" : "bg-[#FF5F1F]")} />
+                                <span className="text-[9px] text-zinc-600 font-black uppercase italic">{val.status === 'VERIFIED' ? "Confirmed" : "Fault"}</span>
                               </div>
                             </div>
                           </div>

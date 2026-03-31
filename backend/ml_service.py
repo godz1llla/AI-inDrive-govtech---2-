@@ -84,13 +84,13 @@ class MLService:
             {"subject": "Региональное соответствие", "value": region_sync},
         ]
         
-        # --- AGRO ARCHETYPES ---
-        if technology > 80 and productivity > 75:
-            archetype = "Локомотив региона"
-        elif productivity < 35 or legal < 40:
-            archetype = "Рискованный актив"
+        # --- AGRO ARCHETYPES (Dynamic by Score) ---
+        if score >= 85:
+            archetype = "ЛОКОМОТИВ РЕГИОНА"
+        elif score >= 40:
+            archetype = "БАЗОВЫЙ ПРОФИЛЬ"
         else:
-            archetype = "Начинающий производитель"
+            archetype = "ГРУППА РИСКА"
 
         return {
             "score": score,
