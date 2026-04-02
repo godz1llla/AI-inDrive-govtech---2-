@@ -127,7 +127,7 @@ const i18n = {
   }
 };
 
-const API = "http://127.0.0.1:8002";
+const API = "http://127.0.0.1:8005";
 
 const ARCHETYPE_COLORS: Record<string, string> = {
   "ЛОКОМОТИВ РЕГИОНА": "bg-[#b6ff00]/10 text-[#b6ff00] border-[#b6ff00]/30",
@@ -142,12 +142,26 @@ const VERDICT_CONFIG: Record<string, { headerBg: string; accent: string; textCla
 };
 
 export default function App() {
+  const ROLES = [
+    { id: 'admin', label: '🏆 Admin — Вся КЗ', region: '' },
+    { id: 'abaiskaya', label: '🏡 Комиссия: Абайская обл.', region: 'Абайская область' },
+    { id: 'almatinskaya', label: '🏡 Комиссия: Алматинская обл.', region: 'Алматинская область' },
+    { id: 'aktobe', label: '🏡 Комиссия: Актюбинская обл.', region: 'Актюбинская область' },
+    { id: 'pavlodar', label: '🏡 Комиссия: Павлодарская обл.', region: 'Павлодарская область' },
+  ];
+  const [roleId, setRoleId] = useState('admin');
+  const currentRole = ROLES.find(r => r.id === roleId) || ROLES[0];
+  const isAdmin = roleId === 'admin';
+
   const [lang, setLang] = useState<'RU' | 'KZ'>('RU');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'registry' | 'analytics' | 'upload'>('dashboard');
   const [apps, setApps] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [analysis, setAnalysis] = useState<any>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [verdictsData, setVerdictsData] = useState<any>(null);
+  const [verdictSaving, setVerdictSaving] = useState(false);
+  const [verdictConflict, setVerdictConflict] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [uploadTab, setUploadTab] = useState<'csv' | 'manual'>('csv');
@@ -157,12 +171,15 @@ export default function App() {
   const [currentRegistryPage, setCurrentRegistryPage] = useState(1);
   const [searchTimer, setSearchTimer] = useState<any>(null);
 
-  useEffect(() => { fetchApps('', 1); fetchAnalytics(); }, []);
+  useEffect(() => { fetchApps('', 1, currentRole.region); fetchAnalytics(); fetchVerdicts(); }, []);
+  // When role changes, auto-reload the registry filtered by region
+  useEffect(() => { setCurrentRegistryPage(1); fetchApps(search, 1, currentRole.region); }, [roleId]);
 
 
-  const fetchApps = async (q: string = '', pg: number = 1) => {
+  const fetchApps = async (q: string = '', pg: number = 1, region: string = currentRole.region) => {
     try {
-      const endpoint = `${API}/search?q=${encodeURIComponent(q)}&page=${pg}&size=50`;
+      const regionParam = region ? `&region=${encodeURIComponent(region)}` : '';
+      const endpoint = `${API}/search?q=${encodeURIComponent(q)}&page=${pg}&size=50${regionParam}`;
       const r = await axios.get(endpoint);
       setApps(r.data);
       const total = parseInt(r.headers['x-total-count'] || '0', 10);
@@ -174,8 +191,9 @@ export default function App() {
   // Debounced search: triggers /search on entire CSV on every keystroke
   const handleSearchChange = (val: string) => {
     setSearch(val);
+    setCurrentRegistryPage(1);
     if (searchTimer) clearTimeout(searchTimer);
-    const timer = setTimeout(() => fetchApps(val, 1), 350);
+    const timer = setTimeout(() => fetchApps(val, 1, currentRole.region), 350);
     setSearchTimer(timer);
   };
 
@@ -186,8 +204,35 @@ export default function App() {
     catch (e) { console.error(e); }
   };
 
+  const fetchVerdicts = async () => {
+    try { const r = await axios.get(`${API}/verdicts`); setVerdictsData(r.data); }
+    catch (e) { console.error(e); }
+  };
+
+  const saveVerdict = async (app: any, decision: string) => {
+    if (!analysis) return;
+    setVerdictSaving(true); setVerdictConflict(null);
+    try {
+      const r = await axios.post(`${API}/verdict`, {
+        application_id: String(app['№ п/п'] || app['Номер заявки'] || Math.random()),
+        region: app['Область'] || '',
+        user_role: currentRole.label,
+        ai_recommendation: app['system_recommendation'] || analysis.verdict_status || '',
+        human_decision: decision,
+        notes: ''
+      });
+      if (r.data.conflict) {
+        setVerdictConflict(r.data.conflict_message);
+      } else {
+        setVerdictConflict('✅ Решение зафиксировано в журнале комиссии');
+      }
+      fetchVerdicts(); // refresh admin stats
+    } catch (e) { console.error(e); }
+    finally { setVerdictSaving(false); }
+  };
+
   const handleAnalyze = async (app: any) => {
-    setLoading(true); setSelected(app); setAnalysis(null);
+    setLoading(true); setSelected(app); setAnalysis(null); setVerdictConflict(null);
     try { const r = await axios.post(`${API}/analyze`, { farmer_data: app, lang }); setAnalysis(r.data); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -229,6 +274,26 @@ export default function App() {
           </div>
         </div>
 
+        {/* ROLE SWITCHER */}
+        <div className="mb-4 p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mb-2">🔐 Роль пользователя</p>
+          <select
+            value={roleId}
+            onChange={(e) => setRoleId(e.target.value)}
+            className="w-full bg-zinc-800 text-white text-[11px] font-bold rounded-lg px-3 py-2 border border-zinc-700 focus:border-[#b6ff00] outline-none cursor-pointer"
+          >
+            {ROLES.map(r => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+          <div className="mt-2 flex items-center gap-2">
+            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isAdmin ? "bg-[#b6ff00]" : "bg-orange-400")} />
+            <p className={cn("text-[9px] font-bold uppercase tracking-wider", isAdmin ? "text-[#b6ff00]" : "text-orange-400")}>
+              {isAdmin ? 'Видимость: Вся КЗ' : `Фильтр: ${currentRole.region}`}
+            </p>
+          </div>
+        </div>
+
         <nav className="flex-1 space-y-2">
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: t.dashboard },
@@ -252,7 +317,23 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="mt-auto space-y-4 pt-6 border-t border-[#27272a]">
+        <div className="mt-4 space-y-3 pt-4 border-t border-[#27272a]">
+          {/* Admin verdicts mini-summary */}
+          {isAdmin && verdictsData && (
+            <div className="p-3 bg-zinc-900/50 rounded-xl border border-zinc-800">
+              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mb-2">Решения комиссий</p>
+              <div className="flex items-center justify-between">
+                <span className="text-[#b6ff00] text-xs font-black">{verdictsData.total}</span>
+                <span className="text-[10px] text-zinc-500">из {stats.total.toLocaleString()}</span>
+              </div>
+              {verdictsData.conflicts > 0 && (
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  <p className="text-[9px] font-black text-red-400 uppercase">{verdictsData.conflicts} конфликта</p>
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={() => setLang(l => l === 'RU' ? 'KZ' : 'RU')}
             className="w-full flex items-center justify-between px-4 py-2 bg-zinc-900 rounded-lg text-xs font-bold hover:bg-zinc-800 transition-colors">
             <div className="flex items-center gap-2">
@@ -266,8 +347,8 @@ export default function App() {
               <UserCircle size={18} className="text-zinc-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold truncate">Inspector P.</p>
-              <p className="text-[10px] text-zinc-500 truncate">MOA / МСХ РК</p>
+              <p className="text-xs font-bold truncate">{isAdmin ? 'Admin' : 'Комиссия'}</p>
+              <p className="text-[10px] text-zinc-500 truncate">{isAdmin ? 'Вся Казахстан' : currentRole.region}</p>
             </div>
             <Settings size={14} className="text-zinc-600 cursor-pointer hover:text-white" />
           </div>
@@ -613,6 +694,90 @@ AI KPI Score: ${score}%
                           </div>
                           <p className="text-xs font-black text-[#b6ff00] w-10 text-right">{reg.score}</p>
                         </div>
+
+                        {/* --- DSS ROLE-BASED ANALYTICS (ADMIN ONLY) --- */}
+                        {isAdmin && (
+                          <div className="col-span-2 space-y-6 mt-6">
+                            <div className="premium-card p-10 border-red-500/10 bg-red-500/5 rounded-[32px]">
+                              <div className="flex items-center justify-between mb-8">
+                                <div>
+                                  <h3 className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+                                    <AlertTriangle className="text-red-500" size={24} /> Конфликт решений (AI vs Коллегия)
+                                  </h3>
+                                  <p className="text-[10px] font-black text-red-500/60 uppercase tracking-[0.2em] mt-1">Инструмент антикоррупционного мониторинга</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-4xl font-black text-red-500 italic">{verdictsData?.conflicts || 0}</p>
+                                  <p className="text-[9px] font-bold text-zinc-500 uppercase">Спорных кейсов</p>
+                                </div>
+                              </div>
+
+                              {verdictsData?.conflict_cases?.length > 0 ? (
+                                <div className="space-y-4">
+                                  {verdictsData.conflict_cases.map((v: any, idx: number) => (
+                                    <div key={idx} className="flex items-center justify-between p-5 bg-black/40 rounded-2xl border border-red-500/10 hover:border-red-500/30 transition-all group">
+                                      <div className="flex items-center gap-6">
+                                        <div className="text-center bg-zinc-900 px-3 py-2 rounded-xl border border-zinc-800">
+                                          <p className="text-[9px] font-black text-zinc-600 uppercase">ID</p>
+                                          <p className="text-xs font-black text-zinc-300">{v.application_id}</p>
+                                        </div>
+                                        <div className="min-w-[120px]">
+                                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{v.region}</p>
+                                          <p className="text-xs font-bold text-zinc-200 mt-1">{v.user_role}</p>
+                                        </div>
+                                        <div className="h-8 w-px bg-zinc-800" />
+                                        <div className="flex items-center gap-4">
+                                          <div className="text-center">
+                                            <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">AI</p>
+                                            <span className="px-2 py-1 bg-red-500/10 text-red-400 text-[9px] font-black rounded uppercase border border-red-500/20">{v.ai_recommendation}</span>
+                                          </div>
+                                          <div className="text-zinc-700 font-bold">vs</div>
+                                          <div className="text-center">
+                                            <p className="text-[8px] font-black text-zinc-600 uppercase mb-1">Комиссия</p>
+                                            <span className="px-2 py-1 bg-[#b6ff00]/10 text-[#b6ff00] text-[9px] font-black rounded uppercase border border-[#b6ff00]/20">{v.human_decision}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <button className="px-5 py-2.5 bg-red-500 text-white text-[10px] font-black uppercase rounded-xl shadow-lg opacity-0 group-hover:opacity-100 transition-all">Прокуратура</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="h-40 flex flex-col items-center justify-center border-2 border-dashed border-zinc-800 rounded-3xl opacity-40">
+                                  <CheckCircle2 size={32} className="text-zinc-600 mb-2" />
+                                  <p className="text-xs font-bold text-zinc-500 uppercase">Конфликтов не выявлено</p>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="premium-card p-10 bg-[#121215] rounded-[32px] border-white/5">
+                              <h3 className="text-sm font-black uppercase tracking-widest text-[#b6ff00] mb-8 flex items-center gap-3">
+                                <TrendingUp size={20} /> Прогресс обработки по регионам
+                              </h3>
+                              <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+                                {verdictsData?.regional_progress?.map((p: any, idx: number) => (
+                                  <div key={idx} className="group">
+                                    <div className="flex justify-between items-end mb-2">
+                                      <div>
+                                        <p className="text-xs font-black text-zinc-300 uppercase leading-none group-hover:text-[#b6ff00] transition-colors">{p.region}</p>
+                                        <p className="text-[9px] font-bold text-zinc-600 uppercase mt-1.5">{p.processed} из {p.total} заявок</p>
+                                      </div>
+                                      <p className="text-sm font-black text-[#b6ff00] italic">{p.pct}%</p>
+                                    </div>
+                                    <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
+                                      <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${p.pct}%` }}
+                                        className="h-full bg-[#b6ff00] shadow-[0_0_10px_#b6ff00]"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                       </div>
                     ))}
                   </div>
@@ -853,6 +1018,48 @@ AI KPI Score: ${score}%
 
                   </div>
                 ) : null}
+
+                {/* COMMISSION VOTING PANEL */}
+                {analysis && (
+                  <div className="mt-6 p-6 rounded-2xl border border-zinc-800 bg-zinc-900/60">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-4 flex items-center gap-2">
+                      <BadgeCheck size={16} className="text-zinc-500" /> Решение комиссии: {currentRole.label}
+                    </h4>
+                    <div className="flex gap-3">
+                      <button
+                        disabled={verdictSaving}
+                        onClick={() => saveVerdict(selected, "ОДОБРЕНО")}
+                        className="flex-1 px-4 py-3 rounded-xl bg-[#b6ff00]/10 border border-[#b6ff00]/30 text-[#b6ff00] text-xs font-black uppercase hover:bg-[#b6ff00]/20 transition-all disabled:opacity-40"
+                      >
+                        ✅ Одобрить
+                      </button>
+                      <button
+                        disabled={verdictSaving}
+                        onClick={() => saveVerdict(selected, "ПРОВЕРКА")}
+                        className="flex-1 px-4 py-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-black uppercase hover:bg-orange-500/20 transition-all disabled:opacity-40"
+                      >
+                        🔍 На проверку
+                      </button>
+                      <button
+                        disabled={verdictSaving}
+                        onClick={() => saveVerdict(selected, "ОТКАЗАНО")}
+                        className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black uppercase hover:bg-red-500/20 transition-all disabled:opacity-40"
+                      >
+                        ❌ Отказать
+                      </button>
+                    </div>
+                    {verdictConflict && (
+                      <div className={cn(
+                        "mt-4 p-3 rounded-xl text-xs font-bold border",
+                        verdictConflict.startsWith("✅")
+                          ? "bg-[#b6ff00]/5 border-[#b6ff00]/20 text-[#b6ff00]"
+                          : "bg-red-500/10 border-red-500/30 text-red-400"
+                      )}>
+                        {verdictConflict}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

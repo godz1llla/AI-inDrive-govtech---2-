@@ -1,0 +1,32 @@
+[
+  {
+    "application_id": "62481",
+    "region": "Алматинская область",
+    "user_role": "🏡 Комиссия: Алматинская обл.",
+    "ai_recommendation": "ОДОБРИТЬ",
+    "human_decision": "ОДОБРЕНО",
+    "notes": "",
+    "timestamp": "2026-03-31T22:55:44.799444+00:00",
+    "conflict": false
+  },
+  {
+    "application_id": "65486",
+    "region": "Актюбинская область",
+    "user_role": "🏆 Admin — Вся КЗ",
+    "ai_recommendation": "ОДОБРИТЬ",
+    "human_decision": "ОДОБРЕНО",
+    "notes": "",
+    "timestamp": "2026-04-02T17:02:33.128219+00:00",
+    "conflict": false
+  },
+  {
+    "application_id": "70739",
+    "region": "Павлодарская область",
+    "user_role": "🏡 Комиссия: Павлодарская обл.",
+    "ai_recommendation": "ПРОВЕРИТЬ",
+    "human_decision": "ОДОБРЕНО",
+    "notes": "",
+    "timestamp": "2026-04-02T17:12:11.419781+00:00",
+    "conflict": false
+  }
+]

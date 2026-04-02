@@ -84,28 +84,34 @@ async def get_applications(page: int = 1, size: int = 50, response: Response = N
     return Response(content=subset.to_json(orient='records'), media_type="application/json")
 
 @app.get("/search")
-async def search_applications(q: str = "", page: int = 1, size: int = 50, response: Response = None):
-    """Full-text search across ALL 33k records — not just the loaded page."""
-    if not q or not q.strip():
-        # No query → return normal paginated list
-        start = (page - 1) * size
-        subset = df_browser.iloc[start:start + size]
-        response.headers["X-Total-Count"] = str(TOTAL_COUNT)
-        return Response(content=subset.to_json(orient='records'), media_type="application/json")
+async def search_applications(
+    q: str = "",
+    page: int = 1,
+    size: int = 50,
+    region: str = "",  # NEW: region filter for commission roles
+    response: Response = None
+):
+    """Full-text search + optional region filter across ALL 33k records."""
+    data = df_browser
 
-    term = q.strip().lower()
-    # Search across all string/object columns + numeric IIN column
-    mask = pd.Series([False] * len(df_browser), index=df_browser.index)
-    for col in df_browser.columns:
-        try:
-            mask |= df_browser[col].astype(str).str.lower().str.contains(term, na=False)
-        except Exception:
-            pass
+    # 1. Region filter (for commission roles)
+    if region and region.strip():
+        data = data[data['\u041e\u0431\u043b\u0430\u0441\u0442\u044c'].astype(str).str.lower() == region.strip().lower()].reset_index(drop=True)
 
-    filtered = df_browser[mask].reset_index(drop=True)
-    total = len(filtered)
+    # 2. Text search
+    if q and q.strip():
+        term = q.strip().lower()
+        mask = pd.Series([False] * len(data), index=data.index)
+        for col in data.columns:
+            try:
+                mask |= data[col].astype(str).str.lower().str.contains(term, na=False)
+            except Exception:
+                pass
+        data = data[mask].reset_index(drop=True)
+
+    total = len(data)
     start = (page - 1) * size
-    subset = filtered.iloc[start:start + size]
+    subset = data.iloc[start:start + size]
     response.headers["X-Total-Count"] = str(total)
     return Response(content=subset.to_json(orient='records'), media_type="application/json")
 
@@ -168,6 +174,105 @@ async def upload_manual(data: dict):
     if len(iin) != 12:
         return {"status": "error", "message": "Некорректный ИИН/БИН (должен быть 12 цифр)"}
     return {"status": "success", "message": "Заявитель добавлен в реестр (симуляция)"}
+
+# ── HUMAN VERDICT STORAGE ─────────────────────────────────────────────────
+HUMAN_VERDICTS_PATH = os.path.join(BASE_DIR, "human_verdicts.json")
+
+class HumanVerdict(BaseModel):
+    application_id: str
+    region: str
+    user_role: str
+    ai_recommendation: str  # Original AI recommendation
+    human_decision: str     # ОДОБРЕНО | ПРОВЕРКА | ОТКАЗАНО
+    notes: str = ""
+
+def _load_verdicts() -> list:
+    if os.path.exists(HUMAN_VERDICTS_PATH):
+        with open(HUMAN_VERDICTS_PATH, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
+def _save_verdicts(verdicts: list):
+    with open(HUMAN_VERDICTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(verdicts, f, ensure_ascii=False, indent=2, default=str)
+
+@app.post("/verdict")
+async def save_human_verdict(verdict: HumanVerdict):
+    """Save a commission member's decision for an application."""
+    verdicts = _load_verdicts()
+    from datetime import datetime, timezone
+    record = verdict.dict()
+    record["timestamp"] = datetime.now(timezone.utc).isoformat()
+
+    # Check for AI vs human conflict
+    ai_rec = record["ai_recommendation"].upper()
+    human_dec = record["human_decision"].upper()
+    conflict = False
+    if ("ОТКАЗ" in ai_rec and "ОДОБР" in human_dec) or \
+       ("ОДОБР" in ai_rec and "ОТКАЗ" in human_dec):
+        conflict = True
+    record["conflict"] = conflict
+
+    # Upsert: replace existing verdict for same application_id + user_role
+    verdicts = [v for v in verdicts if not (
+        v.get("application_id") == record["application_id"] and
+        v.get("user_role") == record["user_role"]
+    )]
+    verdicts.append(record)
+    _save_verdicts(verdicts)
+
+    return {
+        "status": "saved",
+        "conflict": conflict,
+        "conflict_message": "КОНФЛИКТ: Решение комиссии противоречит рекомендации AI. Предупреждение зафиксировано." if conflict else None,
+        "total_verdicts": len(verdicts)
+    }
+
+@app.get("/verdicts")
+async def get_verdicts(region: str = ""):
+    """Admin: get all human verdicts with conflict stats and regional progress."""
+    verdicts = _load_verdicts()
+
+    if region:
+        verdicts = [v for v in verdicts if v.get("region", "").lower() == region.lower()]
+
+    # Regional progress: how many per region are processed vs total
+    region_totals = df_browser['\u041e\u0431\u043b\u0430\u0441\u0442\u044c'].value_counts().to_dict()
+    processed_by_region: dict = {}
+    for v in _load_verdicts():
+        r = v.get("region", "Неизвестно")
+        processed_by_region[r] = processed_by_region.get(r, 0) + 1
+
+    regional_progress = [
+        {
+            "region": r,
+            "total": t,
+            "processed": processed_by_region.get(r, 0),
+            "pending": t - processed_by_region.get(r, 0),
+            "pct": round(processed_by_region.get(r, 0) / t * 100, 1) if t > 0 else 0.0
+        }
+        for r, t in sorted(region_totals.items(), key=lambda x: -x[1])
+    ]
+
+    # Conflict cases: AI said REJECT but human said APPROVE (or vice versa)
+    conflicts = [v for v in _load_verdicts() if v.get("conflict", False)]
+
+    stats = {
+        "decisions": {
+            "ОДОБРЕНО": sum(1 for v in verdicts if "ОДОБР" in v.get("human_decision", "").upper()),
+            "ПРОВЕРКА": sum(1 for v in verdicts if "ПРОВЕР" in v.get("human_decision", "").upper()),
+            "ОТКАЗАНО": sum(1 for v in verdicts if "ОТКАЗ" in v.get("human_decision", "").upper()),
+        },
+        "total": len(_load_verdicts()),
+        "conflicts": len(conflicts),
+        "conflict_cases": conflicts[-10:],  # Last 10 for admin display
+        "regional_progress": regional_progress,
+    }
+    return stats
+
 
 @app.post("/analyze")
 async def analyze_application(req: AnalysisRequest):
